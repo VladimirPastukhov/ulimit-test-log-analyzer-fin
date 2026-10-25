@@ -1,0 +1,24 @@
+2024-11-28 20:10:05.100 [http-nio-10087-exec-48] ERROR c.c.m.client.payme.ClientService
+  - Failed to acquire connection from pool within 5000ms.
+    Active connections: 50/50, pending requests: 127.
+    java.util.concurrent.TimeoutException: Timeout waiting for connection from pool
+    X-Request-Id: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
+
+2024-11-28 20:10:05.102 [http-nio-10087-exec-48] ERROR c.c.m.payme.core.PaymentServiceImpl
+  - Payment order pay-321 failed: could not reach provider.
+    Mapped to: SYSTEM_MALFUNCTION / decline_code=CONNECTION_ERROR
+
+2024-11-28 20:10:10.200 [http-nio-10087-exec-49] WARN  c.c.m.client.payme.ClientService
+  - Slow response from https://api.payme.uz/v2/charge: 28,450ms (threshold: 10,000ms).
+    X-Request-Id: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
+
+2024-11-28 20:10:15.300 [metrics-reporter] INFO  c.c.m.common.metrics.AdapterMetrics
+  - payme.http.requests.active=50, payme.http.requests.queued=134,
+    payme.http.response.p99=29200ms, payme.http.response.p50=18400ms
+
+2024-11-28 20:10:30.000 [http-nio-10087-exec-50] ERROR c.c.m.client.payme.ClientService
+  - POST https://api.payme.uz/v2/charge failed:
+    java.net.SocketTimeoutException: Read timed out (30000ms)
+    X-Request-Id: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
+
+... (all 50 connections held by slow provider responses, new requests failing immediately)

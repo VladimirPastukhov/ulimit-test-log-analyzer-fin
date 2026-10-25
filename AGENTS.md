@@ -1,0 +1,1 @@
+Always add new changes and files to git

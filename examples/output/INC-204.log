@@ -1,0 +1,5 @@
+[1/5] parsed 5 entries, 1 notes, 0 unrecognized lines
+[2/5] signals: adapters=[cc109 (OPay), cc131 (Cobre)], layers=[Core, Infrastructure], components=[Terminals Service, Redis]
+[3/5] enriched with system context (4 adapters, 8 tools)
+[4/5] diagnosing with anthropic claude-sonnet-5-5
+[5/5] attempt 1/4: valid

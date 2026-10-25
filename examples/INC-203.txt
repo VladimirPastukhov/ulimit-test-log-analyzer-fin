@@ -1,0 +1,20 @@
+2024-10-22 11:30:15.200 [rabbit-consumer-1] WARN  c.c.m.halopesa.core.PayoutServiceImpl
+  - Payout callback for order pyt-456 received but order still in BEGIN state.
+    Expected: PENDING_IN_BANK. Will re-queue for later processing.
+
+2024-10-22 11:30:15.205 [rabbit-consumer-1] INFO  c.c.m.halopesa.core.PayoutServiceImpl
+  - Re-queued payout callback to DLQ. Attempt 3 of 5.
+
+2024-10-22 11:32:00.100 [scheduling-1] WARN  c.c.m.halopesa.core.StatusCheckService
+  - Queue depth alert: halopesa.payout.callback queue has 1,247 pending messages.
+    Consumer throughput: 12 msg/sec. Estimated drain time: ~104 seconds.
+
+2024-10-22 11:35:22.330 [http-nio-10139-exec-01] ERROR c.c.m.client.halopesa.SoapClientService
+  - SOAP call to https://api.halopesa.com/PayoutService timed out after 30000ms.
+    X-Request-Id: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
+
+2024-10-22 11:40:00.000 [scheduling-1] ERROR c.c.m.halopesa.core.StatusCheckService
+  - MongoDB health check failed: com.mongodb.MongoTimeoutException: Timed out after 5000ms
+    waiting for a server matching ReadPreferenceServerSelector.
+
+... (payout processing completely stalled for 25 minutes)

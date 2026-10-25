@@ -1,0 +1,38 @@
+schema: spec-driven
+
+context: |
+  Take-home assignment with a ~3 hour implementation budget; keep the solution compact, no enterprise boilerplate.
+  Deliverable is a CLI only (no HTTP service): java -jar build/libs/analyzer.jar <log-file>.
+  Stack: Kotlin, Gradle Kotlin DSL, LangChain4j; LLM provider (Anthropic or OpenAI) and keys come from environment variables.
+  The output JSON schema (src/main/resources/diagnosis-schema.json) comes from the task statement and must not be extended.
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

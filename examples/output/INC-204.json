@@ -1,0 +1,62 @@
+{
+  "incident_id" : "INC-204",
+  "category" : "Routing / terminal configuration issue",
+  "summary" : {
+    "description" : "PAYMENT orders on specific terminals are being declined with FAILED_AUTH / BAD_TERMINAL_CONFIG because no terminal link can be resolved. cc109 (OPay) failed for T-4420 and cc131 (Cobre) failed for T-7712. For T-4420, Redis returned a cache miss and the Terminals Service then returned 404, so the link appears to be missing at the source of truth. In the same window, cc109 processed opay-999 successfully on T-5501 with a valid terminalLinkId, so the problem is per-terminal, not adapter-wide. The annotation mentions 3 adapters, but the signals and logs identify only two. The third is not identified in the evidence provided. The annotation says the issue self-resolved after ~30 minutes, but the log snippet covers only about 1 minute, so recovery is not visible in these logs.",
+    "affected_adapters" : [ "cc109 (OPay)", "cc131 (Cobre)" ],
+    "affected_order_types" : [ "PAYMENT" ],
+    "fault_layer" : "Infrastructure",
+    "severity" : "high",
+    "severity_reasoning" : "About 15% of transactions across multiple adapters were declined for ~30 minutes, so legitimate customer payments failed. The impact is limited to specific terminals and was transient, so it is not critical.",
+    "blast_radius" : "multi_adapter"
+  },
+  "hypotheses" : [ {
+    "title" : "Terminal links deleted or reconfigured in Terminals Service (temporary or erroneous change)",
+    "reasoning" : "The Terminals Service returned 404 for T-4420 and the log suggests the link was deleted or reconfigured. cc131 reported the same 'No terminal link found' error for T-7712, so more than one terminal was affected. A config change, sync job or re-provisioning that briefly removed or re-created links would explain why the issue was limited to certain terminals, spanned several adapters and cleared on its own. The logs do not show who or what changed the links.",
+    "probability" : "likely",
+    "next_steps" : [ {
+      "action" : "Check the current state and change history of terminal links T-4420 and T-7712",
+      "tool" : "Terminals Service",
+      "detail" : "Look up both terminals and their audit log or change history for 16:15-17:15 on 2024-09-18. Look for deletions, re-creations or bulk updates, and confirm the links now exist for EWALLET/NGN and BANK_TRANSFER/COP."
+    }, {
+      "action" : "Find the full set of affected terminals and the third adapter",
+      "tool" : "ELK",
+      "detail" : "Search for 'No terminal link found' and 'BAD_TERMINAL_CONFIG' across all adapters for the full incident window. List distinct terminals and adapters, and check whether they share a merchant, a config batch or a deployment."
+    } ]
+  }, {
+    "title" : "Terminals Service data inconsistency or partial failure during the window",
+    "reasoning" : "A 404 for T-4420 could come from a Terminals Service problem, such as a bad deploy, a replica or DB inconsistency, or a failed data sync, and not from an intentional config change. A transient fault like this would also explain the self-resolution. The logs show a single 404, though, and no 5xx or timeouts from the service, so this is less supported than a direct config change.",
+    "probability" : "possible",
+    "next_steps" : [ {
+      "action" : "Review Terminals Service logs and deployments for the window",
+      "tool" : "Terminals Service",
+      "detail" : "Check for deployments, restarts, migration or sync jobs and error spikes around 16:15-17:15. Compare the 404 rate for terminal-link lookups with the baseline."
+    }, {
+      "action" : "Check Terminals Service request metrics",
+      "tool" : "Grafana",
+      "detail" : "Review the request rate, 4xx/5xx rate and latency for the Terminals Service, and the adapter decline rate for BAD_TERMINAL_CONFIG, to confirm start and end times and correlate them with any service-side event."
+    } ]
+  }, {
+    "title" : "Redis cache miss or eviction exposed a gap in the source data",
+    "reasoning" : "The log shows 'Redis GET terminal-links:T-4420 returned null', followed by a fallback call to the Terminals Service. A miss alone does not cause the failure, since the fallback worked as designed. A miss would only matter if the source data was already missing, as the 404 indicates. Redis is therefore probably a secondary factor that exposed the problem. Nothing in the logs shows Redis itself failing, and there is no Redis evidence for T-7712.",
+    "probability" : "unlikely",
+    "next_steps" : [ {
+      "action" : "Check Redis health and key eviction/expiry around the incident",
+      "tool" : "Redis",
+      "detail" : "Review evicted_keys, expired_keys, memory usage, restarts and keyspace size for the window. Check whether terminal-links:* keys were flushed or evicted in bulk, and check the current keys for T-4420 and T-7712."
+    }, {
+      "action" : "Check how the cache handles 404 responses from Terminals Service",
+      "tool" : "ELK",
+      "detail" : "Search RedisCacheService logs for terminal-links lookups, misses and 404s. Confirm whether a failed lookup is cached negatively and whether recovery depended on the 10-minute TTL."
+    } ]
+  } ],
+  "immediate_actions" : [ {
+    "action" : "Confirm whether links for T-4420, T-7712 and any other affected terminals currently resolve correctly, and that no new BAD_TERMINAL_CONFIG declines are occurring",
+    "risk" : "safe",
+    "reasoning" : "This is read-only. It confirms the issue has really cleared and finds any terminals still failing, without changing production state."
+  }, {
+    "action" : "If any affected terminal link is still missing, restore it from the intended configuration in Terminals Service, then verify with a test lookup. Do not flush Redis broadly.",
+    "risk" : "caution",
+    "reasoning" : "Restoring the configuration fixes the cause, but it should match the intended merchant setup and be approved by the config owner. A broad Redis flush would force many terminal lookups to hit the Terminals Service at once, and the logs give no reason for it."
+  } ]
+}

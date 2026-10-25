@@ -1,0 +1,66 @@
+{
+  "incident_id" : "INC-202",
+  "category" : "Internal configuration / credential issue",
+  "summary" : {
+    "description" : "cc087 (PayMe) is rejecting PAYMENT requests from MI with HTTP 401 because X-Sign signature validation fails (3 signature_mismatch errors, 1 http_status 401 in the snippet). An annotation says all incoming requests have been rejected for about 2 hours. The logs also show adapter-commons 1.7.145-SNAPSHOT, upgraded from 1.7.140. This matches the known 'signing key mismatch after library upgrade' failure mode. However, the version line is logged at 09:17:00, after the first failures at 09:15:22, so the log order does not prove the upgrade started the failures. The snippet does not show how the 2-hour window relates to the deploy time.",
+    "affected_adapters" : [ "cc087 (PayMe)" ],
+    "affected_order_types" : [ "PAYMENT" ],
+    "fault_layer" : "API",
+    "severity" : "high",
+    "severity_reasoning" : "All PAYMENT requests to PayMe have been rejected for about 2 hours, so the adapter is effectively down for new payments. Impact is confined to one adapter, and the logs show no sign of provider-side or platform-wide issues. Escalate to critical if PayMe carries significant volume or no fallback routing exists.",
+    "blast_radius" : "single_adapter"
+  },
+  "hypotheses" : [ {
+    "title" : "adapter-commons upgrade (1.7.140 → 1.7.145-SNAPSHOT) changed signature computation or verification",
+    "reasoning" : "Every failure is a signature mismatch, and the logs show a recent adapter-commons upgrade to a SNAPSHOT build. A change in canonicalization, encoding, header handling or HMAC input between versions would make adapter and MI compute different X-Sign values even with the same key. The caveat is timing: the version line (09:17:00) comes after the first failures (09:15:22). The 2-hour failure window may have started at an earlier deploy, or the version line may come from a later restart, so the deploy timeline needs to be confirmed.",
+    "probability" : "likely",
+    "next_steps" : [ {
+      "action" : "Establish when the failures began relative to the adapter-commons upgrade",
+      "tool" : "ELK",
+      "detail" : "Query cc087 logs for the first 'Request signature validation failed' event and for 'adapter-commons version' startup lines over the last 3-4 hours. Check whether the first 401 follows a restart or deploy."
+    }, {
+      "action" : "Compare signing/verification code and release notes between 1.7.140 and 1.7.145-SNAPSHOT",
+      "tool" : "ELK",
+      "detail" : "Look in logs for the exact build artifact deployed. Confirm with the team what changed in the signature utilities. A SNAPSHOT can differ from build to build."
+    }, {
+      "action" : "Check whether other adapters on 1.7.140 verify MI signatures successfully",
+      "tool" : "Grafana",
+      "detail" : "Compare 401 rates across cc109, cc131 and cc139. If only cc087 is affected and it is the only one on the new commons version, that strongly supports this hypothesis."
+    } ]
+  }, {
+    "title" : "Signing key mismatch between MI and cc087 (Vault secret rotated or not loaded)",
+    "reasoning" : "A signature mismatch with a consistently rejected stream is also what a rotated or stale shared signing key produces, for example a Vault secret updated on one side while the adapter or MI still holds the old value. The logs show no Vault errors or rotation events, so this is not directly evidenced. It cannot be ruled out because the upgrade restart could also have changed which key version is loaded.",
+    "probability" : "possible",
+    "next_steps" : [ {
+      "action" : "Check the version history and last update time of the cc087 signing secret",
+      "tool" : "Vault",
+      "detail" : "Look for a rotation or write around the start of the 401s. Compare the secret version cc087 loaded at startup with the current version."
+    }, {
+      "action" : "Search cc087 and MI startup logs for secret-loading messages or warnings",
+      "tool" : "ELK",
+      "detail" : "Look for Vault read failures, fallback to cached or default keys, or key version identifiers logged at startup around 09:17."
+    } ]
+  }, {
+    "title" : "MI-side change in how requests to cc087 are signed or forwarded (terminal/credential config)",
+    "reasoning" : "The adapter reports that the signature received from MI does not match what it expects. A change on the MI side, such as different credentials or a different signing path for the PayMe terminal, would produce the same symptom. The logs show nothing from MI, and only cc087 appears in the signals, so this is the least supported explanation.",
+    "probability" : "unlikely",
+    "next_steps" : [ {
+      "action" : "Review recent MI deployments and configuration changes affecting routing or signing to cc087",
+      "tool" : "MI",
+      "detail" : "Check MI logs for the outgoing X-Sign generation and request path for PayMe orders. Compare with other adapters that are working."
+    }, {
+      "action" : "Verify the cc087 registration and address that MI resolves",
+      "tool" : "Consul",
+      "detail" : "Confirm MI is reaching the intended cc087 instance and not a stale or differently configured instance."
+    } ]
+  } ],
+  "immediate_actions" : [ {
+    "action" : "Roll back cc087 to adapter-commons 1.7.140 (or the last known-good release) if the deploy timeline confirms the upgrade preceded the 401s",
+    "risk" : "caution",
+    "reasoning" : "This is the quickest likely fix for a library-induced signing regression. It still needs a deployment, so confirm the failure start time and the known-good build first, and verify with a test payment afterward."
+  }, {
+    "action" : "Check the cc087 signing secret version in Vault against what MI uses, without modifying anything",
+    "risk" : "safe",
+    "reasoning" : "This is a read-only check that quickly rules a key mismatch in or out. Do not rotate keys or restart services blindly until the cause is known."
+  } ]
+}

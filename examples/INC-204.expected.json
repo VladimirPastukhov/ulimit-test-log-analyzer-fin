@@ -1,0 +1,22 @@
+{
+  "incident_id": "INC-204",
+  "category": "Routing / terminal configuration issue",
+  "summary": {
+    "affected_adapters": [
+      "cc109",
+      "cc131"
+    ],
+    "affected_order_types": [
+      "PAYMENT"
+    ],
+    "fault_layer": [
+      "Infrastructure",
+      "Core"
+    ],
+    "severity": [
+      "medium",
+      "high"
+    ],
+    "blast_radius": "multi_adapter"
+  }
+}

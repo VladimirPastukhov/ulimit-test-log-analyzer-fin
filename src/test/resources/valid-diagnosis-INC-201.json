@@ -1,0 +1,27 @@
+{
+  "incident_id": "INC-201",
+  "category": "External provider degradation",
+  "summary": {
+    "description": "OPay returns 503 MAINTENANCE for all payment creation requests.",
+    "affected_adapters": ["cc109 (OPay)"],
+    "affected_order_types": ["PAYMENT"],
+    "fault_layer": "External",
+    "severity": "high",
+    "severity_reasoning": "All OPay payments fail for 45 minutes.",
+    "blast_radius": "single_adapter"
+  },
+  "hypotheses": [
+    {
+      "title": "Planned or unplanned maintenance on OPay side",
+      "reasoning": "The 503 responses carry a MAINTENANCE code.",
+      "probability": "likely",
+      "next_steps": [
+        {"action": "Confirm all errors are provider 503s", "tool": "ELK", "detail": "service=cc109 AND level=ERROR"},
+        {"action": "Check failure rate across terminals", "tool": "Grafana", "detail": "Dashboard adapter-cc109-overview"}
+      ]
+    }
+  ],
+  "immediate_actions": [
+    {"action": "Enable circuit breaker for OPay", "risk": "safe", "reasoning": "Fails fast while the provider is down."}
+  ]
+}

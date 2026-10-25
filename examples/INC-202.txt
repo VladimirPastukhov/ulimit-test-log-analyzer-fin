@@ -1,0 +1,19 @@
+2024-12-03 09:15:22.301 [http-nio-10087-exec-03] ERROR c.c.m.payme.api.PaymentController
+  - Request signature validation failed for order xyz-789.
+    Expected X-Sign: sha256=a1b2c3d4e5f6...
+    Received X-Sign: sha256=9f8e7d6c5b4a...
+    X-Request-Id: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+
+2024-12-03 09:15:22.305 [http-nio-10087-exec-03] WARN  c.c.m.payme.api.PaymentController
+  - Rejecting request from MI: signature mismatch. Returning 401.
+
+2024-12-03 09:15:30.112 [http-nio-10087-exec-07] ERROR c.c.m.payme.api.PaymentController
+  - Request signature validation failed for order xyz-790.
+    Expected X-Sign: sha256=a1b2c3d4e5f6...
+    Received X-Sign: sha256=ff00ee11dd22...
+    X-Request-Id: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+
+2024-12-03 09:17:00.000 [main] INFO  c.c.m.payme.Application
+  - adapter-commons version: 1.7.145-SNAPSHOT (upgraded from 1.7.140)
+
+... (all incoming requests rejected with 401 for the last 2 hours)

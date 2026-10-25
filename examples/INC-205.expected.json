@@ -1,0 +1,24 @@
+{
+  "incident_id": "INC-205",
+  "category": [
+    "External provider degradation",
+    "Connection pool / resource exhaustion"
+  ],
+  "summary": {
+    "affected_adapters": [
+      "cc087"
+    ],
+    "affected_order_types": [
+      "PAYMENT"
+    ],
+    "fault_layer": [
+      "External",
+      "SDK"
+    ],
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "blast_radius": "single_adapter"
+  }
+}

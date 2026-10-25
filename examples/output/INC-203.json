@@ -1,0 +1,66 @@
+{
+  "incident_id" : "INC-203",
+  "category" : "Infrastructure failure (DB/cache/queue)",
+  "summary" : {
+    "description" : "Halopesa (cc139) payouts are stalled. At 11:30:15 a payout callback for pyt-456 arrived while the order was still in BEGIN instead of PENDING_IN_BANK, so it was re-queued (attempt 3 of 5). At 11:32 the halopesa.payout.callback queue held 1,247 pending messages. A SOAP call to the provider timed out after 30000ms at 11:35. At 11:40 the MongoDB health check failed with MongoTimeoutException (5000ms, server selection). The order never reaching PENDING_IN_BANK points to a failed or delayed state transition, and MongoDB unavailability is the best-supported explanation. The logs show only one occurrence of each error, so the causal order is not proven. Two oddities: the annotation says 25 minutes stalled but the log window covers about 10 minutes, and platform docs list PostgreSQL for order persistence while this adapter reports MongoDB. Both need confirming.",
+    "affected_adapters" : [ "cc139 (Halopesa)" ],
+    "affected_order_types" : [ "PAYOUT" ],
+    "fault_layer" : "Infrastructure",
+    "severity" : "high",
+    "severity_reasoning" : "Payouts are completely stalled per the annotation, and callbacks are backing up. Callbacks have a bounded retry budget (attempt 3 of 5), so some may be dropped or dead-lettered and orders could be left in inconsistent states. Impact is limited to one adapter and one order type, so not critical.",
+    "blast_radius" : "single_adapter"
+  },
+  "hypotheses" : [ {
+    "title" : "MongoDB unreachable or no eligible server, so order state transitions are not persisted",
+    "reasoning" : "The 11:40:00 health check failed with MongoTimeoutException while waiting for a server matching ReadPreferenceServerSelector. That usually means no reachable or eligible replica set member, such as a primary election, network partition or node down. If order updates to PENDING_IN_BANK were failing or slow, callbacks would find orders in BEGIN, which matches the 11:30 warning. Caveat: the only Mongo error is at 11:40, ten minutes after the first symptom. Earlier Mongo errors may exist outside the snippet, or the DB degradation may have started earlier without being logged here.",
+    "probability" : "likely",
+    "next_steps" : [ {
+      "action" : "Check MongoDB replica set health and recent elections",
+      "tool" : "MongoDB",
+      "detail" : "Run rs.status() and check primary availability, member states, replication lag and election events around 11:15-11:40. Check connectivity from the cc139 pod."
+    }, {
+      "action" : "Look for earlier Mongo errors and failed state updates in cc139 logs",
+      "tool" : "ELK",
+      "detail" : "Search service:cc139 for MongoTimeoutException, MongoSocketException and 'server selection' from 11:00 onward. Check whether the payout BEGIN -> PENDING_IN_BANK update for pyt-456 failed or was delayed."
+    }, {
+      "action" : "Review Mongo connection pool and latency metrics",
+      "tool" : "Grafana",
+      "detail" : "Check the cc139 Mongo driver pool metrics, DB latency and the time the degradation started relative to 11:30."
+    } ]
+  }, {
+    "title" : "Callback-before-state race, with re-queue loop amplifying the RabbitMQ backlog",
+    "reasoning" : "A callback for pyt-456 arrived while the order was still in BEGIN and was re-queued, which may mean callbacks are outrunning the order's state update. The queue held 1,247 messages at 11:32, consumer throughput was 12 msg/sec, and the ~104s drain estimate assumes steady state. That is unlikely to hold if callbacks keep being re-queued. The queue backlog may be a symptom of the stall rather than the cause. The 5-attempt limit risks callbacks being exhausted and lost, leaving orders stuck.",
+    "probability" : "possible",
+    "next_steps" : [ {
+      "action" : "Inspect queue depth trend, redelivery rate and DLQ contents",
+      "tool" : "RabbitMQ",
+      "detail" : "Check halopesa.payout.callback and the DLQ: message count over time, unacked count and redeliveries. Count messages near attempt 5 without purging anything."
+    }, {
+      "action" : "Trace pyt-456 end to end",
+      "tool" : "ELK",
+      "detail" : "Compare the payout submit time, the BEGIN -> PENDING_IN_BANK update time and the callback arrival time. If the callback precedes the update, it is a race. If the update never happened, it points to hypothesis 1 or 3."
+    } ]
+  }, {
+    "title" : "Halopesa SOAP endpoint slow or degraded, delaying PENDING_IN_BANK transitions",
+    "reasoning" : "A SOAP call to https://api.halopesa.com/PayoutService timed out after 30000ms at 11:35. If submissions were slow or timing out, orders could remain in BEGIN while callbacks for earlier submissions arrived. Evidence is weak: it is a single timeout, it happened after the 11:30 symptom, and it cannot explain the MongoDB failure. It may be a secondary effect or an independent blip.",
+    "probability" : "possible",
+    "next_steps" : [ {
+      "action" : "Check SOAP client latency and timeout rate to Halopesa",
+      "tool" : "Prometheus",
+      "detail" : "Query the cc139 RestClientProvider/SOAP client latency histogram and error rate for 11:00-11:45. Look for a sustained rise before 11:30 rather than a single outlier."
+    }, {
+      "action" : "Search for other provider timeouts or 5xx responses",
+      "tool" : "ELK",
+      "detail" : "Search service:cc139 for SoapClientService errors in the window. Check whether X-Request-Id 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f is an isolated case. Check for a provider maintenance notice."
+    } ]
+  } ],
+  "immediate_actions" : [ {
+    "action" : "Verify MongoDB availability for cc139 right now and escalate to the DB owner if the replica set has no primary or is unreachable",
+    "risk" : "safe",
+    "reasoning" : "This is a read-only check and addresses the only hard infrastructure failure in the logs."
+  }, {
+    "action" : "Preserve callback messages: do not purge the queue or DLQ. Consider pausing new payout submissions to cc139 or raising the re-queue attempt limit until the DB is confirmed healthy",
+    "risk" : "caution",
+    "reasoning" : "Callbacks are at attempt 3 of 5 and could be exhausted, losing status updates for payouts that may already be in the bank. Pausing submissions or changing retry settings affects live traffic, so coordinate with the adapter owner first."
+  } ]
+}

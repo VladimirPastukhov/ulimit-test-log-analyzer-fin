@@ -1,0 +1,62 @@
+{
+  "incident_id" : "INC-201",
+  "category" : "External provider degradation",
+  "summary" : {
+    "description" : "OPay's API (api.opay.ng /v3/payments/create) is returning HTTP 503 with body code MAINTENANCE. The annotation says the pattern repeats for 200+ requests over about 45 minutes. The cc109 adapter is handling this as designed: the SDK layer logs the failure and the Core layer maps it to SYSTEM_MALFUNCTION / PROVIDER_UNAVAILABLE. The status check job also reports 47 orders stuck in PENDING_IN_BANK because the provider is still returning 503.",
+    "affected_adapters" : [ "cc109 (OPay)" ],
+    "affected_order_types" : [ "PAYMENT" ],
+    "fault_layer" : "External",
+    "severity" : "high",
+    "severity_reasoning" : "Payment creation through OPay has failed continuously for about 45 minutes, with 200+ failed requests. 47 orders are in an unresolved PENDING_IN_BANK state, which creates a reconciliation risk. The logs show only cc109 affected and no sign of data loss or an internal fault, so this is not critical.",
+    "blast_radius" : "single_adapter"
+  },
+  "hypotheses" : [ {
+    "title" : "OPay maintenance window or outage on the payments API",
+    "reasoning" : "Every failure is a 503 whose body is provider-formatted JSON ({\"message\":\"Service temporarily unavailable\",\"code\":\"MAINTENANCE\"}). It is consistent across different threads (exec-12, exec-08) and request IDs, and it has lasted about 45 minutes. The Core layer mapped it correctly to SYSTEM_MALFUNCTION / PROVIDER_UNAVAILABLE. The status check job also gets 503, so the outage is not limited to the create endpoint.",
+    "probability" : "likely",
+    "next_steps" : [ {
+      "action" : "Establish when the 503s started and whether any request has succeeded since",
+      "tool" : "ELK",
+      "detail" : "Filter cc109 logs for ClientService errors and for successful /v3/payments/create calls. Find the first MAINTENANCE 503 and check that no 2xx responses appear in between."
+    }, {
+      "action" : "Check the cc109 outbound success/error ratio over time",
+      "tool" : "Grafana",
+      "detail" : "Look at the RestClientProvider metrics for cc109: 5xx rate and latency for api.opay.ng. Compare with other adapters to confirm the problem is isolated to OPay."
+    } ]
+  }, {
+    "title" : "Orders stuck in PENDING_IN_BANK may have been accepted by OPay before or during the outage",
+    "reasoning" : "The status check job reports 47 orders in PENDING_IN_BANK while the provider keeps returning 503, so their real state at OPay is unknown. Some may have been created or completed on the provider side. Failing or resubmitting them blindly could produce wrong final statuses or duplicate payments. The logs do not show the actual provider-side state of these orders.",
+    "probability" : "possible",
+    "next_steps" : [ {
+      "action" : "List the stuck orders and their timestamps relative to the first 503",
+      "tool" : "PostgreSQL",
+      "detail" : "Query the cc109 order DB for orders in PENDING_IN_BANK, with creation time and last status check time. Separate those created before the outage began from those created during it."
+    }, {
+      "action" : "Confirm the status check job keeps retrying and is not giving up or timing orders out",
+      "tool" : "ELK",
+      "detail" : "Search for StatusCheckService updateOrderStatus entries and watch the stuck-order count and any timeout/terminal-state transitions. Verify the count is stable or growing."
+    } ]
+  }, {
+    "title" : "Adapter-side or network egress problem to api.opay.ng",
+    "reasoning" : "The responses are valid provider-formatted 503 bodies with MAINTENANCE codes, so the requests clearly reach OPay. There is no evidence of DNS failures, connect timeouts, or pool exhaustion, so this is unlikely.",
+    "probability" : "unlikely",
+    "next_steps" : [ {
+      "action" : "Check for connection-level errors or pool saturation on cc109",
+      "tool" : "Prometheus",
+      "detail" : "Check HTTP client pool metrics and connect/read timeout counters for cc109. They should show no saturation and no connect errors if the issue is purely upstream."
+    }, {
+      "action" : "Search for non-503 failure types in cc109 logs",
+      "tool" : "ELK",
+      "detail" : "Look for UnknownHost, ConnectException, SocketTimeout or SSL errors in the same window. Finding none would confirm the problem is upstream."
+    } ]
+  } ],
+  "immediate_actions" : [ {
+    "action" : "Confirm the maintenance with OPay (status page or partner contact), get an ETA, and notify stakeholders and merchants that OPay payments are unavailable",
+    "risk" : "safe",
+    "reasoning" : "This is read-only and communication-only. The ETA decides whether to wait or to reroute OPay traffic to another provider through MI, if one is configured."
+  }, {
+    "action" : "Do not restart cc109, and do not manually fail or resubmit the 47 PENDING_IN_BANK orders until OPay recovers and the status check job can query provider state",
+    "risk" : "caution",
+    "reasoning" : "A restart will not fix an upstream outage. Forcing a status on orders whose provider-side state is unknown can cause incorrect final statuses or duplicate charges. After recovery, verify the stuck orders reconcile."
+  } ]
+}

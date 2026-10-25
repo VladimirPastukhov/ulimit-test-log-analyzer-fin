@@ -1,0 +1,22 @@
+2024-09-18 16:45:01.100 [http-nio-10109-exec-05] ERROR c.c.m.opay.core.PaymentServiceImpl
+  - No terminal link found for terminal=T-4420, paymentMethod=EWALLET, currency=NGN.
+    Returning FAILED_AUTH with decline=BAD_TERMINAL_CONFIG.
+    X-Request-Id: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
+
+2024-09-18 16:45:03.200 [http-nio-10131-exec-02] ERROR c.c.m.cobre.core.PaymentServiceImpl
+  - No terminal link found for terminal=T-7712, paymentMethod=BANK_TRANSFER, currency=COP.
+    Returning FAILED_AUTH with decline=BAD_TERMINAL_CONFIG.
+    X-Request-Id: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
+
+2024-09-18 16:45:05.500 [http-nio-10109-exec-11] INFO  c.c.m.opay.core.PaymentServiceImpl
+  - Payment order opay-999 processed successfully.
+    Terminal=T-5501, terminalLinkId=88432.
+
+2024-09-18 16:46:00.000 [scheduling-1] WARN  c.c.m.common.cache.RedisCacheService
+  - Redis GET terminal-links:T-4420 returned null. Cache miss — calling Terminals Service.
+
+2024-09-18 16:46:00.500 [scheduling-1] ERROR c.c.m.common.cache.RedisCacheService
+  - Terminals Service returned 404 for terminal=T-4420.
+    Possible cause: terminal link was deleted or reconfigured.
+
+... (affects ~15% of transactions across 3 adapters for 30 minutes, then self-resolves)

@@ -1,0 +1,18 @@
+{
+  "incident_id": "INC-201",
+  "category": "External provider degradation",
+  "summary": {
+    "affected_adapters": [
+      "cc109"
+    ],
+    "affected_order_types": [
+      "PAYMENT"
+    ],
+    "fault_layer": "External",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "blast_radius": "single_adapter"
+  }
+}

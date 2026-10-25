@@ -1,0 +1,34 @@
+{
+  "incident_id": "string|null",
+  "category": "string",
+  "summary": {
+    "description": "string",
+    "affected_adapters": ["string"],
+    "affected_order_types": ["string"],
+    "fault_layer": "SDK|Core|API|Infrastructure|External",
+    "severity": "low|medium|high|critical",
+    "severity_reasoning": "string",
+    "blast_radius": "single_merchant|single_adapter|multi_adapter|platform_wide"
+  },
+  "hypotheses": [
+    {
+      "title": "string",
+      "reasoning": "string",
+      "probability": "likely|possible|unlikely",
+      "next_steps": [
+        {
+          "action": "string",
+          "tool": "string",
+          "detail": "string"
+        }
+      ]
+    }
+  ],
+  "immediate_actions": [
+    {
+      "action": "string",
+      "risk": "safe|caution|risky",
+      "reasoning": "string"
+    }
+  ]
+}

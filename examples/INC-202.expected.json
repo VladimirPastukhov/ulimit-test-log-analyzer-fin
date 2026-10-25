@@ -1,0 +1,21 @@
+{
+  "incident_id": "INC-202",
+  "category": "Internal configuration / credential issue",
+  "summary": {
+    "affected_adapters": [
+      "cc087"
+    ],
+    "affected_order_types": [
+      "PAYMENT"
+    ],
+    "fault_layer": [
+      "API",
+      "Core"
+    ],
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "blast_radius": "single_adapter"
+  }
+}

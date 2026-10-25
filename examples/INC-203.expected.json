@@ -1,0 +1,18 @@
+{
+  "incident_id": "INC-203",
+  "category": "Infrastructure failure (DB/cache/queue)",
+  "summary": {
+    "affected_adapters": [
+      "cc139"
+    ],
+    "affected_order_types": [
+      "PAYOUT"
+    ],
+    "fault_layer": "Infrastructure",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "blast_radius": "single_adapter"
+  }
+}

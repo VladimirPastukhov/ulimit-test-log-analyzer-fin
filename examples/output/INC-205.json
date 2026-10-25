@@ -1,0 +1,66 @@
+{
+  "incident_id" : "INC-205",
+  "category" : "External provider degradation",
+  "summary" : {
+    "description" : "cc087 (PayMe) is experiencing connection pool exhaustion in the SDK layer because the PayMe API (api.payme.uz/v2/charge) is responding very slowly. Observed latencies: p50=18.4s, p99=29.2s, with individual calls at 28.45s and a read timeout at 30s, against a 10s slow-response threshold. All 50/50 pooled connections are held by slow in-flight requests, with 127-134 requests pending. New requests fail after waiting 5000ms for a connection, are mapped in Core to SYSTEM_MALFUNCTION / CONNECTION_ERROR, and PAYMENT orders such as pay-321 fail. The pool exhaustion is a secondary effect of provider slowness; the logs do not show any adapter-side fault that would explain the latency.",
+    "affected_adapters" : [ "cc087 (PayMe)" ],
+    "affected_order_types" : [ "PAYMENT" ],
+    "fault_layer" : "External",
+    "severity" : "high",
+    "severity_reasoning" : "Pool is fully saturated with a growing queue (127 -> 134 pending) and p50 latency is already 18s, so most new PAYMENT requests on cc087 will fail or time out. Impact is limited to a single adapter, and the logs show only a small number of sampled failures, so it is not critical. It would escalate if PayMe is a major payment route for merchants without fallback.",
+    "blast_radius" : "single_adapter"
+  },
+  "hypotheses" : [ {
+    "title" : "PayMe API degradation causing slow responses and pool exhaustion",
+    "reasoning" : "Median latency is 18.4s and p99 29.2s against a 10s threshold, a slow response of 28,450ms to /v2/charge, and a SocketTimeoutException at the 30,000ms read timeout. Because the median is already so high, most requests are slow rather than a few outliers. With 50/50 connections active and long hold times, the pool drains and new requests hit the 5000ms acquire timeout. This is consistent with the annotation that all connections are held by slow provider responses.",
+    "probability" : "likely",
+    "next_steps" : [ {
+      "action" : "Check the latency and error trend for PayMe calls to confirm when degradation began and whether it is ongoing",
+      "tool" : "Grafana",
+      "detail" : "Review payme.http.response p50/p99, payme.http.requests.active and queued for cc087 over the last 1-2 hours. Identify the onset time and whether latency is improving or worsening."
+    }, {
+      "action" : "Look for more slow-response and timeout log lines to gauge scale",
+      "tool" : "ELK",
+      "detail" : "Search cc087 logs for 'Slow response from https://api.payme.uz', 'SocketTimeoutException' and 'Failed to acquire connection' from 20:00 onward. Count failures and check whether slowness is on /v2/charge only or all PayMe endpoints."
+    }, {
+      "action" : "Check PayMe's status page or contact their support for an incident or maintenance window",
+      "tool" : "ELK",
+      "detail" : "Correlate the onset time from the logs with any provider-announced incident; look for earlier slow-response warnings that would indicate gradual degradation."
+    } ]
+  }, {
+    "title" : "Adapter-side connection pool too small or connections leaking, amplifying the slowness",
+    "reasoning" : "The pool of 50 is fully used with 127-134 pending requests, so the pool is a bottleneck under current load. The logs show no evidence of leaks, and the slow responses themselves explain the saturation. The pool size and the 30s read timeout (versus a 5s acquire timeout) make the adapter fail fast but not recover fast. This is a possible contributing factor rather than the root cause.",
+    "probability" : "possible",
+    "next_steps" : [ {
+      "action" : "Check whether traffic volume to cc087 spiked before the exhaustion",
+      "tool" : "Prometheus",
+      "detail" : "Query request rate for cc087 and compare with the normal baseline. If traffic is normal, the pool is saturated by latency rather than volume."
+    }, {
+      "action" : "Check whether pool active connections ever returned to normal after prior slow periods",
+      "tool" : "Grafana",
+      "detail" : "Look at payme.http.requests.active history; a pool that never drains after provider recovery would suggest leaked connections."
+    } ]
+  }, {
+    "title" : "Network path or egress issue between the adapter and api.payme.uz",
+    "reasoning" : "The symptoms (read timeouts, slow responses) could also be produced by network degradation or egress/DNS problems. However, the failures are read timeouts rather than connect failures, and there is no evidence of problems for other adapters, so this is less likely than provider-side slowness. The logs here do not include other adapters or network-level errors to confirm or rule it out.",
+    "probability" : "unlikely",
+    "next_steps" : [ {
+      "action" : "Check whether other adapters calling external providers show elevated latency at the same time",
+      "tool" : "Grafana",
+      "detail" : "Compare outbound HTTP latency for cc109, cc131 and cc139 over the same window. Simultaneous degradation would point toward a shared network or egress problem."
+    }, {
+      "action" : "Search for connect-level errors or DNS failures on cc087",
+      "tool" : "ELK",
+      "detail" : "Look for ConnectException, UnknownHostException or SSL handshake errors for api.payme.uz in the incident window."
+    } ]
+  } ],
+  "immediate_actions" : [ {
+    "action" : "Notify PayMe/provider support and the payments operations team of the latency and ongoing PAYMENT failures; if the platform supports it, consider routing traffic to alternate providers for affected terminals",
+    "risk" : "safe",
+    "reasoning" : "Communication has no system impact. Rerouting is only an option if terminal configuration supports a fallback, and should be coordinated with the owners of that configuration."
+  }, {
+    "action" : "Do not restart cc087 or blindly increase the pool size; monitor pool and latency metrics until the provider recovers",
+    "risk" : "caution",
+    "reasoning" : "A restart would drop in-flight payment requests, which could leave order states uncertain, and the pool would saturate again while PayMe is slow. A larger pool could increase load on an already degraded provider. Reconsider only if the metrics show leaked connections."
+  } ]
+}
